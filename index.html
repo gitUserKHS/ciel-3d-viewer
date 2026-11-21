@@ -72,34 +72,34 @@
     }
 
     .brand {
-      padding: 12px 18px;
+      padding: 8px 14px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .brand-star {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
       background: linear-gradient(135deg, #2d62d9, #78b3ff);
       display: grid;
       place-items: center;
       color: #fff;
-      font-size: 18px;
+      font-size: 16px;
       box-shadow: 0 4px 12px rgba(45, 98, 217, 0.30);
     }
 
     .brand h1 {
       margin: 0;
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 700;
       letter-spacing: -0.02em;
     }
 
     .brand p {
       margin: 2px 0 0;
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-sub);
     }
 
@@ -429,7 +429,7 @@
     // Scene & Renderer
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.03, 50);
-    camera.position.set(0, 1.02, 2.55);
+    camera.position.set(0, 0.90, 3.25);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -459,7 +459,8 @@
     keyLight.shadow.camera.right = 1.2;
     keyLight.shadow.camera.top = 2.1;
     keyLight.shadow.camera.bottom = -0.2;
-    keyLight.shadow.bias = -0.0004;
+    keyLight.shadow.bias = -0.0002;
+    keyLight.shadow.normalBias = 0.028;
     scene.add(keyLight);
 
     const fillLight = new THREE.DirectionalLight(0xd9e8ff, 0.85);
@@ -489,37 +490,10 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.target.set(0, 0.88, 0);
+    controls.target.set(0, 0.86, 0);
     controls.minDistance = 0.32;
-    controls.maxDistance = 5.5;
+    controls.maxDistance = 5.8;
     controls.maxPolarAngle = Math.PI * 0.62;
-
-    // Camera Presets
-    const CAM_PRESETS = {
-      full: { pos: new THREE.Vector3(0, 1.02, 2.55), target: new THREE.Vector3(0, 0.88, 0) },
-      face: { pos: new THREE.Vector3(0, 1.50, 0.72), target: new THREE.Vector3(0, 1.48, 0.02) },
-      hand: { pos: new THREE.Vector3(0.14, 0.96, 0.56), target: new THREE.Vector3(0.28, 0.95, 0.0) },
-      side: { pos: new THREE.Vector3(2.45, 1.02, 0.05), target: new THREE.Vector3(0, 0.88, 0) },
-      back: { pos: new THREE.Vector3(0, 1.02, -2.55), target: new THREE.Vector3(0, 0.88, 0) },
-    };
-    let camAnim = null;
-
-    document.querySelectorAll('[data-cam]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('[data-cam]').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        const p = CAM_PRESETS[btn.dataset.cam];
-        if (p) {
-          camAnim = {
-            t: 0,
-            fromPos: camera.position.clone(),
-            fromTgt: controls.target.clone(),
-            toPos: p.pos.clone(),
-            toTgt: p.target.clone(),
-          };
-        }
-      });
-    });
 
     // Character State (Morph Targets & Bones)
     const morphMeshes = [];
@@ -537,6 +511,35 @@
     let currentPoseMode = 'idol';
     let poseBlend = 1.0;
     let poseTargetBlend = 1.0;
+
+    // Camera Presets (pose-aware for 손·팔)
+    const CAM_PRESETS = {
+      full: { pos: new THREE.Vector3(0, 0.90, 3.25), target: new THREE.Vector3(0, 0.86, 0) },
+      face: { pos: new THREE.Vector3(0, 1.50, 0.72), target: new THREE.Vector3(0, 1.48, 0.02) },
+      hand: { pos: new THREE.Vector3(0.14, 0.96, 0.56), target: new THREE.Vector3(0.28, 0.94, 0.0) },
+      handIdol: { pos: new THREE.Vector3(-0.18, 1.38, 0.82), target: new THREE.Vector3(-0.36, 1.32, 0.08) },
+      side: { pos: new THREE.Vector3(3.10, 0.90, 0.05), target: new THREE.Vector3(0, 0.86, 0) },
+      back: { pos: new THREE.Vector3(0, 0.90, -3.25), target: new THREE.Vector3(0, 0.86, 0) },
+    };
+    let camAnim = null;
+
+    document.querySelectorAll('[data-cam]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-cam]').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        const key = (btn.dataset.cam === 'hand' && currentPoseMode === 'idol') ? 'handIdol' : btn.dataset.cam;
+        const p = CAM_PRESETS[key];
+        if (p) {
+          camAnim = {
+            t: 0,
+            fromPos: camera.position.clone(),
+            fromTgt: controls.target.clone(),
+            toPos: p.pos.clone(),
+            toTgt: p.target.clone(),
+          };
+        }
+      });
+    });
 
     function addWorldAxisDelta(boneName, worldAxis, deg, blendWeight, accumQuats) {
       const b = bonesByName[boneName];
@@ -591,21 +594,22 @@
         addWorldAxisDelta('Head', AX_Y, -8.0, w, deltas);
         addWorldAxisDelta('Head', AX_X, -2.5, w, deltas);
 
-        // Right arm (viewer's left) raised cheerfully in idol wave!
-        addWorldAxisDelta('Shoulder_R', AX_Z, -8.0, w, deltas);
-        addWorldAxisDelta('UpperArm_R', AX_Z, -72.0, w, deltas);
-        addWorldAxisDelta('UpperArm_R', AX_X, -14.0, w, deltas);
-        addWorldAxisDelta('LowerArm_R', AX_Z, -44.0, w, deltas);
-        addWorldAxisDelta('LowerArm_R', AX_X, -10.0, w, deltas);
-        addWorldAxisDelta('Hand_R', AX_Y, 10.0, w, deltas);
+        // Right arm (viewer's left): smooth 1:2 scapulohumeral clavicle + upper arm lift!
+        addWorldAxisDelta('Shoulder_R', AX_Z, -18.0, w, deltas);
+        addWorldAxisDelta('UpperArm_R', AX_Z, -36.0, w, deltas);
+        addWorldAxisDelta('UpperArm_R', AX_X, -12.0, w, deltas);
+        addWorldAxisDelta('LowerArm_R', AX_Z, -52.0, w, deltas);
+        addWorldAxisDelta('LowerArm_R', AX_X, -14.0, w, deltas);
+        addWorldAxisDelta('Hand_R', AX_Y, 12.0, w, deltas);
+        addWorldAxisDelta('Hand_R', AX_Z, -8.0, w, deltas);
 
-        // Left arm (viewer's right) gracefully poised near starry organza skirt
+        // Left arm (viewer's right): naturally relaxed near organza skirt
         addWorldAxisDelta('Shoulder_L', AX_Z, 4.0, w, deltas);
-        addWorldAxisDelta('UpperArm_L', AX_Z, 11.0, w, deltas);
-        addWorldAxisDelta('UpperArm_L', AX_X, -8.0, w, deltas);
-        addWorldAxisDelta('LowerArm_L', AX_Z, 18.0, w, deltas);
-        addWorldAxisDelta('LowerArm_L', AX_X, -12.0, w, deltas);
-        addWorldAxisDelta('Hand_L', AX_Y, -10.0, w, deltas);
+        addWorldAxisDelta('UpperArm_L', AX_Z, 5.0, w, deltas);
+        addWorldAxisDelta('UpperArm_L', AX_X, -6.0, w, deltas);
+        addWorldAxisDelta('LowerArm_L', AX_Z, 12.0, w, deltas);
+        addWorldAxisDelta('LowerArm_L', AX_X, -10.0, w, deltas);
+        addWorldAxisDelta('Hand_L', AX_Y, -8.0, w, deltas);
 
         // Gentle stance on legs
         addWorldAxisDelta('UpperLeg_R', AX_X, 6.0, w, deltas);
@@ -692,10 +696,10 @@
       }
     }
 
-    // Load Ciel GLB
+    // Load Ciel V5 GLB
     const gltfLoader = new GLTFLoader();
     gltfLoader.load(
-      './assets/Ciel_WuWa_3D_web.glb',
+      './assets/Ciel_WuWa_3D_web.glb?v=5',
       (gltf) => {
         const model = gltf.scene;
         scene.add(model);
@@ -738,14 +742,17 @@
                 m.side = THREE.DoubleSide;
                 m.opacity = 0.90;
                 m.roughness = 0.25;
+                obj.receiveShadow = false;
               } else if (m.name === 'Mat_Hair') {
                 m.transparent = false;
-                m.alphaTest = 0.35;
+                m.alphaTest = 0.12;
                 m.side = THREE.DoubleSide;
                 m.roughness = 0.36;
+                obj.receiveShadow = false;
               } else if (m.name === 'Mat_Eye_Iris') {
                 m.roughness = 0.08;
                 m.emissiveIntensity = 0.48;
+                obj.receiveShadow = false;
               } else if (
                 m.name === 'Mat_White_Satin' ||
                 m.name === 'Mat_Skirt_Pleat' ||
@@ -761,6 +768,7 @@
               ) {
                 m.roughness = 0.62;
                 m.metalness = 0.0;
+                if (m.name === 'Mat_Skin_Face') obj.receiveShadow = false;
               }
               m.needsUpdate = true;
             }
