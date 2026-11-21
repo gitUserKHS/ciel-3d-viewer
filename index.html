@@ -29,7 +29,7 @@
       height: 100%;
       overflow: hidden;
       font-family: 'Pretendard', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: radial-gradient(circle at 50% 24%, #ffffff 0%, var(--bg-top) 56%, #dde8fa 100%);
+      background: radial-gradient(circle at 50% 24%, #f4f8ff 0%, #e0ecfc 58%, #cfdff6 100%);
       color: var(--text-main);
     }
 
@@ -436,20 +436,20 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
+    renderer.toneMappingExposure = 1.00;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     wrap.appendChild(renderer.domElement);
 
     const pmrem = new THREE.PMREMGenerator(renderer);
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environmentIntensity = 0.65;
+    scene.environmentIntensity = 0.56;
 
     // Studio Lights matching Ciel's luminous pearl studio
-    const hemi = new THREE.HemisphereLight(0xf6f9ff, 0xdbe6f7, 0.95);
+    const hemi = new THREE.HemisphereLight(0xf6f9ff, 0xdbe6f7, 0.86);
     scene.add(hemi);
 
-    const keyLight = new THREE.DirectionalLight(0xfffaf4, 1.75);
+    const keyLight = new THREE.DirectionalLight(0xfffaf4, 1.48);
     keyLight.position.set(-1.6, 2.5, 2.3);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.set(1024, 1024);
@@ -463,7 +463,7 @@
     keyLight.shadow.normalBias = 0.028;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xd9e8ff, 0.85);
+    const fillLight = new THREE.DirectionalLight(0xd9e8ff, 0.78);
     fillLight.position.set(2.0, 1.6, 1.7);
     scene.add(fillLight);
 
@@ -508,6 +508,7 @@
     const restQuats = {};
     const restWorldQuats = {};
     const restDirs = {};
+    const idolQuats = {};
     let currentPoseMode = 'idol';
     let poseBlend = 1.0;
     let poseTargetBlend = 1.0;
@@ -517,7 +518,7 @@
       full: { pos: new THREE.Vector3(0, 0.90, 3.25), target: new THREE.Vector3(0, 0.86, 0) },
       face: { pos: new THREE.Vector3(0, 1.50, 0.72), target: new THREE.Vector3(0, 1.48, 0.02) },
       hand: { pos: new THREE.Vector3(0.14, 0.96, 0.56), target: new THREE.Vector3(0.28, 0.94, 0.0) },
-      handIdol: { pos: new THREE.Vector3(-0.18, 1.38, 0.82), target: new THREE.Vector3(-0.36, 1.32, 0.08) },
+      handIdol: { pos: new THREE.Vector3(-0.16, 1.38, 0.92), target: new THREE.Vector3(-0.32, 1.34, 0.10) },
       side: { pos: new THREE.Vector3(3.10, 0.90, 0.05), target: new THREE.Vector3(0, 0.86, 0) },
       back: { pos: new THREE.Vector3(0, 0.90, -3.25), target: new THREE.Vector3(0, 0.86, 0) },
     };
@@ -551,6 +552,19 @@
       accumQuats[boneName].multiply(dq);
     }
 
+    function addLocalEulerDelta(boneName, rxDeg, ryDeg, rzDeg, order, accumQuats) {
+      if (!bonesByName[boneName]) return;
+      const e = new THREE.Euler(
+        THREE.MathUtils.degToRad(rxDeg),
+        THREE.MathUtils.degToRad(ryDeg),
+        THREE.MathUtils.degToRad(rzDeg),
+        order || 'XYZ'
+      );
+      const dq = new THREE.Quaternion().setFromEuler(e);
+      if (!accumQuats[boneName]) accumQuats[boneName] = new THREE.Quaternion();
+      accumQuats[boneName].multiply(dq);
+    }
+
     function computeCurlAxis(boneName, palmFwdWorld) {
       const d = restDirs[boneName];
       if (!d) return new THREE.Vector3(0, 0, 1);
@@ -568,95 +582,108 @@
     const AX_Y = new THREE.Vector3(0, 1, 0);
     const AX_Z = new THREE.Vector3(0, 0, 1);
 
+    function buildIdolPoseQuats() {
+      const idolDeltas = {};
+
+      // Core contrapposto & charming head tilt
+      addWorldAxisDelta('Hips', AX_Y, 5.0, 1.0, idolDeltas);
+      addWorldAxisDelta('Spine', AX_Z, 3.0, 1.0, idolDeltas);
+      addWorldAxisDelta('Chest', AX_Z, 3.5, 1.0, idolDeltas);
+      addWorldAxisDelta('Neck', AX_Y, -4.0, 1.0, idolDeltas);
+      addWorldAxisDelta('Head', AX_Z, -5.0, 1.0, idolDeltas);
+      addWorldAxisDelta('Head', AX_Y, -7.0, 1.0, idolDeltas);
+      addWorldAxisDelta('Head', AX_X, -2.0, 1.0, idolDeltas);
+
+      // Right arm (viewer's left): natural anatomical 3D wave using bone local axes (humerus external roll + elbow flexion!)
+      addLocalEulerDelta('Shoulder_R', -5.0,  0.0, 14.0, 'ZXY', idolDeltas);
+      addLocalEulerDelta('UpperArm_R', -14.0, 42.0, 32.0, 'ZXY', idolDeltas);
+      addLocalEulerDelta('LowerArm_R', -64.0, 14.0,  0.0, 'ZXY', idolDeltas);
+      addLocalEulerDelta('Hand_R',     -10.0,  6.0,  6.0, 'XYZ', idolDeltas);
+
+      // Left arm (viewer's right): naturally relaxed organic elbow curve beside organza skirt
+      addLocalEulerDelta('Shoulder_L',  -2.0,   0.0,  3.0, 'ZXY', idolDeltas);
+      addLocalEulerDelta('UpperArm_L',  -8.0, -16.0, 10.0, 'ZXY', idolDeltas);
+      addLocalEulerDelta('LowerArm_L', -24.0,  -8.0,  0.0, 'ZXY', idolDeltas);
+      addLocalEulerDelta('Hand_L',      -8.0,  -6.0, -6.0, 'XYZ', idolDeltas);
+
+      // Gentle stance on legs
+      addWorldAxisDelta('UpperLeg_R', AX_X, 6.0, 1.0, idolDeltas);
+      addWorldAxisDelta('UpperLeg_R', AX_Z, -3.5, 1.0, idolDeltas);
+      addWorldAxisDelta('LowerLeg_R', AX_X, -12.0, 1.0, idolDeltas);
+      addWorldAxisDelta('UpperLeg_L', AX_X, -4.0, 1.0, idolDeltas);
+      addWorldAxisDelta('UpperLeg_L', AX_Z, 2.5, 1.0, idolDeltas);
+
+      // Breeze on hair & skirt train
+      addWorldAxisDelta('Hair_Back_L_02', AX_Z, 5.0, 1.0, idolDeltas);
+      addWorldAxisDelta('Hair_Back_R_02', AX_Z, -4.0, 1.0, idolDeltas);
+      addWorldAxisDelta('Organza_L_02', AX_Z, 6.0, 1.0, idolDeltas);
+      addWorldAxisDelta('Organza_R_02', AX_Z, -5.0, 1.0, idolDeltas);
+
+      // Inward staggered finger curls via exact rest curl axis
+      const rCurls = {
+        Thumb: [10, 12, 8],
+        Index: [6, 10, 6],
+        Middle: [12, 16, 10],
+        Ring: [18, 22, 14],
+        Pinky: [24, 28, 16],
+      };
+      const lCurls = {
+        Thumb: [14, 16, 10],
+        Index: [8, 12, 8],
+        Middle: [16, 22, 12],
+        Ring: [24, 28, 16],
+        Pinky: [30, 34, 18],
+      };
+      for (const [fn, angs] of Object.entries(rCurls)) {
+        angs.forEach((deg, idx) => {
+          const bname = `${fn}_0${idx + 1}_R`;
+          addWorldAxisDelta(bname, computeCurlAxis(bname, fn === 'Thumb' ? THUMB_FWD_R : PALM_FWD_R), deg, 1.0, idolDeltas);
+        });
+      }
+      for (const [fn, angs] of Object.entries(lCurls)) {
+        angs.forEach((deg, idx) => {
+          const bname = `${fn}_0${idx + 1}_L`;
+          addWorldAxisDelta(bname, computeCurlAxis(bname, fn === 'Thumb' ? THUMB_FWD_L : PALM_FWD_L), deg, 1.0, idolDeltas);
+        });
+      }
+
+      for (const [bname, rq] of Object.entries(restQuats)) {
+        idolQuats[bname] = rq.clone();
+        if (idolDeltas[bname]) {
+          idolQuats[bname].multiply(idolDeltas[bname]);
+        }
+      }
+    }
+
     function updateSkeletonPose(elapsed, dt) {
       if (Object.keys(bonesByName).length === 0) return;
-      poseBlend += (poseTargetBlend - poseBlend) * Math.min(1, dt * 6.5);
-      const w = poseBlend;
+      poseBlend += (poseTargetBlend - poseBlend) * Math.min(1, dt * 3.2);
+      const easeW = poseBlend * poseBlend * (3.0 - 2.0 * poseBlend);
       const sway = Math.sin(elapsed * 1.45);
       const breathe = Math.sin(elapsed * 2.1);
 
-      const deltas = {};
-
-      // Subtle live idle motion even in rest pose
-      addWorldAxisDelta('Chest', AX_X, breathe * 1.1, 1.0, deltas);
-      addWorldAxisDelta('Hair_Back_L_02', AX_Z, sway * 2.4, 1.0, deltas);
-      addWorldAxisDelta('Hair_Back_R_02', AX_Z, -sway * 2.4, 1.0, deltas);
-      addWorldAxisDelta('Organza_L_02', AX_Z, sway * 3.0, 1.0, deltas);
-      addWorldAxisDelta('Organza_R_02', AX_Z, -sway * 3.0, 1.0, deltas);
-
-      if (w > 0.001) {
-        // Core contrapposto & charming head tilt
-        addWorldAxisDelta('Hips', AX_Y, 5.0, w, deltas);
-        addWorldAxisDelta('Spine', AX_Z, 3.0, w, deltas);
-        addWorldAxisDelta('Chest', AX_Z, 3.5, w, deltas);
-        addWorldAxisDelta('Neck', AX_Y, -4.0, w, deltas);
-        addWorldAxisDelta('Head', AX_Z, -6.5, w, deltas);
-        addWorldAxisDelta('Head', AX_Y, -8.0, w, deltas);
-        addWorldAxisDelta('Head', AX_X, -2.5, w, deltas);
-
-        // Right arm (viewer's left): smooth 1:2 scapulohumeral clavicle + upper arm lift!
-        addWorldAxisDelta('Shoulder_R', AX_Z, -18.0, w, deltas);
-        addWorldAxisDelta('UpperArm_R', AX_Z, -36.0, w, deltas);
-        addWorldAxisDelta('UpperArm_R', AX_X, -12.0, w, deltas);
-        addWorldAxisDelta('LowerArm_R', AX_Z, -52.0, w, deltas);
-        addWorldAxisDelta('LowerArm_R', AX_X, -14.0, w, deltas);
-        addWorldAxisDelta('Hand_R', AX_Y, 12.0, w, deltas);
-        addWorldAxisDelta('Hand_R', AX_Z, -8.0, w, deltas);
-
-        // Left arm (viewer's right): naturally relaxed near organza skirt
-        addWorldAxisDelta('Shoulder_L', AX_Z, 4.0, w, deltas);
-        addWorldAxisDelta('UpperArm_L', AX_Z, 5.0, w, deltas);
-        addWorldAxisDelta('UpperArm_L', AX_X, -6.0, w, deltas);
-        addWorldAxisDelta('LowerArm_L', AX_Z, 12.0, w, deltas);
-        addWorldAxisDelta('LowerArm_L', AX_X, -10.0, w, deltas);
-        addWorldAxisDelta('Hand_L', AX_Y, -8.0, w, deltas);
-
-        // Gentle stance on legs
-        addWorldAxisDelta('UpperLeg_R', AX_X, 6.0, w, deltas);
-        addWorldAxisDelta('UpperLeg_R', AX_Z, -3.5, w, deltas);
-        addWorldAxisDelta('LowerLeg_R', AX_X, -12.0, w, deltas);
-        addWorldAxisDelta('UpperLeg_L', AX_X, -4.0, w, deltas);
-        addWorldAxisDelta('UpperLeg_L', AX_Z, 2.5, w, deltas);
-
-        // Breeze on hair & skirt train
-        addWorldAxisDelta('Hair_Back_L_02', AX_Z, 5.0 + sway * 1.5, w, deltas);
-        addWorldAxisDelta('Hair_Back_R_02', AX_Z, -4.0 - sway * 1.5, w, deltas);
-        addWorldAxisDelta('Organza_L_02', AX_Z, 6.0, w, deltas);
-        addWorldAxisDelta('Organza_R_02', AX_Z, -5.0, w, deltas);
-
-        // Guaranteed inward staggered finger curls via exact rest curl axis!
-        const rCurls = {
-          Thumb: [10, 12, 8],
-          Index: [6, 10, 6],
-          Middle: [12, 16, 10],
-          Ring: [18, 22, 14],
-          Pinky: [24, 28, 16],
-        };
-        const lCurls = {
-          Thumb: [14, 16, 10],
-          Index: [8, 12, 8],
-          Middle: [16, 22, 12],
-          Ring: [24, 28, 16],
-          Pinky: [30, 34, 18],
-        };
-        for (const [fn, angs] of Object.entries(rCurls)) {
-          angs.forEach((deg, idx) => {
-            const bname = `${fn}_0${idx + 1}_R`;
-            addWorldAxisDelta(bname, computeCurlAxis(bname, fn === 'Thumb' ? THUMB_FWD_R : PALM_FWD_R), deg, w, deltas);
-          });
-        }
-        for (const [fn, angs] of Object.entries(lCurls)) {
-          angs.forEach((deg, idx) => {
-            const bname = `${fn}_0${idx + 1}_L`;
-            addWorldAxisDelta(bname, computeCurlAxis(bname, fn === 'Thumb' ? THUMB_FWD_L : PALM_FWD_L), deg, w, deltas);
-          });
-        }
+      // Base geodesic slerp between A-pose and Idol Stage Pose
+      for (const [bname, b] of Object.entries(bonesByName)) {
+        const qRest = restQuats[bname];
+        const qIdol = idolQuats[bname] || qRest;
+        b.quaternion.slerpQuaternions(qRest, qIdol, easeW);
       }
 
-      for (const [bname, b] of Object.entries(bonesByName)) {
-        b.quaternion.copy(restQuats[bname]);
-        if (deltas[bname]) {
-          b.quaternion.multiply(deltas[bname]);
+      // Layer subtle alive idle sway & breathing plus gentle wave follow-through in idol pose
+      const liveDeltas = {};
+      addWorldAxisDelta('Chest', AX_X, breathe * 1.1, 1.0, liveDeltas);
+      addWorldAxisDelta('Hair_Back_L_02', AX_Z, sway * 2.4, 1.0, liveDeltas);
+      addWorldAxisDelta('Hair_Back_R_02', AX_Z, -sway * 2.4, 1.0, liveDeltas);
+      addWorldAxisDelta('Organza_L_02', AX_Z, sway * 3.0, 1.0, liveDeltas);
+      addWorldAxisDelta('Organza_R_02', AX_Z, -sway * 3.0, 1.0, liveDeltas);
+      if (easeW > 0.01) {
+        addLocalEulerDelta('LowerArm_R', sway * 3.2 * easeW, 0.0, 0.0, 'ZXY', liveDeltas);
+        addLocalEulerDelta('Hand_R', 0.0, 0.0, Math.sin(elapsed * 1.45 - 0.5) * 3.5 * easeW, 'XYZ', liveDeltas);
+      }
+
+      for (const [bname, dq] of Object.entries(liveDeltas)) {
+        if (bonesByName[bname]) {
+          bonesByName[bname].quaternion.multiply(dq);
         }
       }
     }
@@ -696,10 +723,10 @@
       }
     }
 
-    // Load Ciel V5 GLB
+    // Load Ciel V6 GLB
     const gltfLoader = new GLTFLoader();
     gltfLoader.load(
-      './assets/Ciel_WuWa_3D_web.glb?v=5',
+      './assets/Ciel_WuWa_3D_web.glb?v=6',
       (gltf) => {
         const model = gltf.scene;
         scene.add(model);
@@ -745,9 +772,12 @@
                 obj.receiveShadow = false;
               } else if (m.name === 'Mat_Hair') {
                 m.transparent = false;
-                m.alphaTest = 0.12;
+                m.depthWrite = true;
+                m.depthTest = true;
+                m.alphaTest = 0.18;
+                m.anisotropy = 0;
                 m.side = THREE.DoubleSide;
-                m.roughness = 0.36;
+                m.roughness = 0.42;
                 obj.receiveShadow = false;
               } else if (m.name === 'Mat_Eye_Iris') {
                 m.roughness = 0.08;
@@ -758,9 +788,11 @@
                 m.name === 'Mat_Skirt_Pleat' ||
                 m.name === 'Mat_Navy_Satin' ||
                 m.name === 'Mat_Royal_Ribbon' ||
-                m.name === 'Mat_Glove_White'
+                m.name === 'Mat_Glove_White' ||
+                m.name === 'Mat_Navy_Deep'
               ) {
                 m.side = THREE.DoubleSide;
+                if ('anisotropy' in m) m.anisotropy = 0;
               } else if (
                 m.name === 'Mat_Skin_Face' ||
                 m.name === 'Mat_Skin_Body' ||
@@ -775,6 +807,7 @@
           }
         });
 
+        buildIdolPoseQuats();
         loaderOverlay.classList.add('hidden');
       },
       (xhr) => {
@@ -837,7 +870,7 @@
     for (const [file, label] of galleryItems) {
       const card = document.createElement('div');
       card.className = 'gallery-item';
-      card.innerHTML = `<img src="./assets/renders/${file}" alt="${label}" loading="lazy" /><span>${label}</span>`;
+      card.innerHTML = `<img src="./assets/renders/${file}?v=6" alt="${label}" loading="lazy" /><span>${label}</span>`;
       galleryGrid.appendChild(card);
     }
 
