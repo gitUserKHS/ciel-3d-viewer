@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>시엘 (Ciel) — 명조 스타일 3D 버추얼 아이돌 뷰어</title>
+  <style>
+    :root {
+      --bg-top: #ebf2fc;
+      --bg-bot: #f9fbff;
+      --glass: rgba(255, 255, 255, 0.78);
+      --glass-border: rgba(162, 190, 236, 0.55);
+      --accent: #2c62d8;
+      --accent-soft: #e6efff;
+      --gold: #c69a47;
+      --text-main: #1b2842;
+      --text-sub: #546689;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Pretendard', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at 50% 24%, #ffffff 0%, var(--bg-top) 56%, #dde8fa 100%);
+      color: var(--text-main);
+    }
+
+    #canvas-wrap {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      outline: none;
+    }
+
+    /* Top Header Card */
+    .top-bar {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .glass-card {
+      pointer-events: auto;
+      background: var(--glass);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(34, 65, 128, 0.10);
+    }
+
+    .brand {
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-star {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #2d62d9, #78b3ff);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 18px;
+      box-shadow: 0 4px 12px rgba(45, 98, 217, 0.30);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    .top-actions {
+      padding: 8px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    /* Right / Bottom Control Dock */
+    .control-panel {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      width: 320px;
+      max-width: calc(100vw - 32px);
+      z-index: 10;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-sub);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    button {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid rgba(154, 180, 224, 0.65);
+      background: rgba(255, 255, 255, 0.85);
+      color: var(--text-main);
+      padding: 6px 10px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.16s ease;
+    }
+
+    button:hover {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    button.active {
+      background: linear-gradient(135deg, #2d62d9, #4c86f0);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 3px 10px rgba(45, 98, 217, 0.28);
+    }
+
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 4px;
+      border-top: 1px solid rgba(170, 194, 232, 0.45);
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    .hint-pill {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 10;
+      padding: 8px 13px;
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    /* Loading Overlay */
+    #loader-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: radial-gradient(circle at 50% 45%, #ffffff 0%, #e9f0fc 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+
+    #loader-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader-ring {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(45, 98, 217, 0.18);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .progress-track {
+      width: 240px;
+      height: 7px;
+      background: rgba(45, 98, 217, 0.14);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #2d62d9, #7cb8ff);
+      transition: width 0.15s ease;
+    }
+
+    #error-banner {
+      display: none;
+      position: fixed;
+      top: 78px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 60;
+      background: #fff2f2;
+      color: #a12020;
+      border: 1px solid #f0b2b2;
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      max-width: 90vw;
+    }
+
+    /* Gallery Modal */
+    #gallery-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: rgba(20, 32, 58, 0.65);
+      backdrop-filter: blur(8px);
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    #gallery-modal.open {
+      display: block;
+    }
+
+    .gallery-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: #f8fbff;
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 20px 60px rgba(10, 24, 52, 0.35);
+    }
+
+    .gallery-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .gallery-head h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 14px;
+    }
+
+    .gallery-item {
+      background: #fff;
+      border: 1px solid rgba(162, 190, 236, 0.5);
+      border-radius: 12px;
+      overflow: hidden;
+      text-align: center;
+    }
+
+    .gallery-item img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .gallery-item span {
+      display: block;
+      padding: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-sub);
+    }
+
+    @media (max-width: 720px) {
+      .hint-pill { display: none; }
+      .control-panel {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        width: auto;
+        padding: 12px;
+      }
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="loader-overlay">
+    <div class="loader-ring"></div>
+    <div id="loader-text" style="font-size: 14px; font-weight: 700;">시엘 3D 모델 불러오는 중... 0%</div>
+    <div class="progress-track"><div id="loader-bar" class="progress-fill"></div></div>
+  </div>
+
+  <div id="error-banner"></div>
+
+  <div id="canvas-wrap"></div>
+
+  <header class="top-bar">
+    <div class="glass-card brand">
+      <div class="brand-star">✦</div>
+      <div>
+        <h1>시엘 (Ciel) — 명조 스타일 3D 뷰어</h1>
+        <p>Blender 5.2 네이티브 모델링 · 94본 리깅 · 실시간 표정 모프</p>
+      </div>
+    </div>
+
+    <div class="glass-card top-actions">
+      <button data-cam="full" class="active">전신</button>
+      <button data-cam="face">얼굴</button>
+      <button data-cam="hand">손·팔</button>
+      <button data-cam="side">측면</button>
+      <button data-cam="back">후면</button>
+      <button id="btn-gallery">Cycles 렌더 갤러리</button>
+    </div>
+  </header>
+
+  <aside class="glass-card control-panel">
+    <div>
+      <div class="section-label">표정 (Shape Keys)</div>
+      <div class="btn-row" id="expr-buttons">
+        <button data-expr="neutral" class="active">기본</button>
+        <button data-expr="Smile_Happy">활짝 웃음 ^ ^</button>
+        <button data-expr="Surprised">놀람 o</button>
+        <button data-expr="Sad_Worried">슬픔·걱정</button>
+        <button data-expr="Blink_L">윙크</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">포즈 (Skeleton)</div>
+      <div class="btn-row" id="pose-buttons">
+        <button data-pose="idol" class="active">아이돌 스테이지 포즈</button>
+        <button data-pose="rest">기본 A-포즈</button>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <span>자동 눈 깜빡임 / 회전</span>
+      <div class="btn-row">
+        <button id="btn-blink" class="active">깜빡임 ON</button>
+        <button id="btn-spin">자동 회전</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="glass-card hint-pill">
+    드래그: 회전 · 휠: 확대/축소 · 우클릭 드래그: 이동
+  </div>
+
+  <div id="gallery-modal">
+    <div class="gallery-inner">
+      <div class="gallery-head">
+        <h2>Cycles OPTIX 스튜디오 렌더 갤러리</h2>
+        <button id="btn-close-gallery">닫기</button>
+      </div>
+      <div class="gallery-grid" id="gallery-grid"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    const wrap = document.getElementById('canvas-wrap');
+    const loaderOverlay = document.getElementById('loader-overlay');
+    const loaderText = document.getElementById('loader-text');
+    const loaderBar = document.getElementById('loader-bar');
+    const errorBanner = document.getElementById('error-banner');
+
+    function showError(msg) {
+      errorBanner.textContent = msg;
+      errorBanner.style.display = 'block';
+      loaderOverlay.classList.add('hidden');
+    }
+
+    // Scene & Renderer
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.03, 50);
+    camera.position.set(0, 1.02, 2.55);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    wrap.appendChild(renderer.domElement);
+
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.65;
+
+    // Studio Lights matching Ciel's luminous pearl studio
+    const hemi = new THREE.HemisphereLight(0xf6f9ff, 0xdbe6f7, 0.95);
+    scene.add(hemi);
+
+    const keyLight = new THREE.DirectionalLight(0xfffaf4, 1.75);
+    keyLight.position.set(-1.6, 2.5, 2.3);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.camera.near = 0.3;
+    keyLight.shadow.camera.far = 8;
+    keyLight.shadow.camera.left = -1.2;
+    keyLight.shadow.camera.right = 1.2;
+    keyLight.shadow.camera.top = 2.1;
+    keyLight.shadow.camera.bottom = -0.2;
+    keyLight.shadow.bias = -0.0004;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0xd9e8ff, 0.85);
+    fillLight.position.set(2.0, 1.6, 1.7);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xddeaff, 1.35);
+    rimLight.position.set(0.8, 2.3, -2.1);
+    scene.add(rimLight);
+
+    // Subtle soft studio pedestal shadow catcher
+    const shadowGeo = new THREE.CircleGeometry(1.15, 48);
+    const shadowMat = new THREE.ShadowMaterial({ opacity: 0.11 });
+    const shadowDisk = new THREE.Mesh(shadowGeo, shadowMat);
+    shadowDisk.rotation.x = -Math.PI / 2;
+    shadowDisk.position.y = 0.001;
+    shadowDisk.receiveShadow = true;
+    scene.add(shadowDisk);
+
+    const ringGeo = new THREE.RingGeometry(0.46, 0.475, 64);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x99b8ef, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+    const pedestalRing = new THREE.Mesh(ringGeo, ringMat);
+    pedestalRing.rotation.x = -Math.PI / 2;
+    pedestalRing.position.y = 0.002;
+    scene.add(pedestalRing);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 0.88, 0);
+    controls.minDistance = 0.32;
+    controls.maxDistance = 5.5;
+    controls.maxPolarAngle = Math.PI * 0.62;
+
+    // Camera Presets
+    const CAM_PRESETS = {
+      full: { pos: new THREE.Vector3(0, 1.02, 2.55), target: new THREE.Vector3(0, 0.88, 0) },
+      face: { pos: new THREE.Vector3(0, 1.50, 0.72), target: new THREE.Vector3(0, 1.48, 0.02) },
+      hand: { pos: new THREE.Vector3(0.14, 0.96, 0.56), target: new THREE.Vector3(0.28, 0.95, 0.0) },
+      side: { pos: new THREE.Vector3(2.45, 1.02, 0.05), target: new THREE.Vector3(0, 0.88, 0) },
+      back: { pos: new THREE.Vector3(0, 1.02, -2.55), target: new THREE.Vector3(0, 0.88, 0) },
+    };
+    let camAnim = null;
+
+    document.querySelectorAll('[data-cam]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-cam]').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        const p = CAM_PRESETS[btn.dataset.cam];
+        if (p) {
+          camAnim = {
+            t: 0,
+            fromPos: camera.position.clone(),
+            fromTgt: controls.target.clone(),
+            toPos: p.pos.clone(),
+            toTgt: p.target.clone(),
+          };
+        }
+      });
+    });
+
+    // Character State (Morph Targets & Bones)
+    const morphMeshes = [];
+    const ALL_EXPR_KEYS = ['Smile_Happy', 'Surprised', 'Sad_Worried', 'Blink', 'Blink_L', 'Blink_R', 'aa', 'ih', 'ou', 'ee', 'oh'];
+    let targetExpr = 'neutral';
+    let autoBlink = true;
+    let autoSpin = false;
+    let nextBlinkTime = 2.6;
+    let blinkProgress = -1;
+
+    const bonesByName = {};
+    const restQuats = {};
+    const restWorldQuats = {};
+    const restDirs = {};
+    let currentPoseMode = 'idol';
+    let poseBlend = 1.0;
+    let poseTargetBlend = 1.0;
+
+    function addWorldAxisDelta(boneName, worldAxis, deg, blendWeight, accumQuats) {
+      const b = bonesByName[boneName];
+      if (!b || !restWorldQuats[boneName] || blendWeight < 0.001) return;
+      const rad = THREE.MathUtils.degToRad(deg * blendWeight);
+      const localAxis = worldAxis.clone().applyQuaternion(restWorldQuats[boneName].clone().invert()).normalize();
+      const dq = new THREE.Quaternion().setFromAxisAngle(localAxis, rad);
+      if (!accumQuats[boneName]) accumQuats[boneName] = new THREE.Quaternion();
+      accumQuats[boneName].multiply(dq);
+    }
+
+    function computeCurlAxis(boneName, palmFwdWorld) {
+      const d = restDirs[boneName];
+      if (!d) return new THREE.Vector3(0, 0, 1);
+      const ax = new THREE.Vector3().crossVectors(d, palmFwdWorld);
+      if (ax.lengthSq() < 1e-6) return new THREE.Vector3(0, 0, 1);
+      return ax.normalize();
+    }
+
+    const PALM_FWD_R = new THREE.Vector3(0.60, -0.32, 0.73).normalize();
+    const PALM_FWD_L = new THREE.Vector3(-0.60, -0.32, 0.73).normalize();
+    const THUMB_FWD_R = new THREE.Vector3(0.78, -0.42, 0.45).normalize();
+    const THUMB_FWD_L = new THREE.Vector3(-0.78, -0.42, 0.45).normalize();
+
+    const AX_X = new THREE.Vector3(1, 0, 0);
+    const AX_Y = new THREE.Vector3(0, 1, 0);
+    const AX_Z = new THREE.Vector3(0, 0, 1);
+
+    function updateSkeletonPose(elapsed, dt) {
+      if (Object.keys(bonesByName).length === 0) return;
+      poseBlend += (poseTargetBlend - poseBlend) * Math.min(1, dt * 6.5);
+      const w = poseBlend;
+      const sway = Math.sin(elapsed * 1.45);
+      const breathe = Math.sin(elapsed * 2.1);
+
+      const deltas = {};
+
+      // Subtle live idle motion even in rest pose
+      addWorldAxisDelta('Chest', AX_X, breathe * 1.1, 1.0, deltas);
+      addWorldAxisDelta('Hair_Back_L_02', AX_Z, sway * 2.4, 1.0, deltas);
+      addWorldAxisDelta('Hair_Back_R_02', AX_Z, -sway * 2.4, 1.0, deltas);
+      addWorldAxisDelta('Organza_L_02', AX_Z, sway * 3.0, 1.0, deltas);
+      addWorldAxisDelta('Organza_R_02', AX_Z, -sway * 3.0, 1.0, deltas);
+
+      if (w > 0.001) {
+        // Core contrapposto & charming head tilt
+        addWorldAxisDelta('Hips', AX_Y, 5.0, w, deltas);
+        addWorldAxisDelta('Spine', AX_Z, 3.0, w, deltas);
+        addWorldAxisDelta('Chest', AX_Z, 3.5, w, deltas);
+        addWorldAxisDelta('Neck', AX_Y, -4.0, w, deltas);
+        addWorldAxisDelta('Head', AX_Z, -6.5, w, deltas);
+        addWorldAxisDelta('Head', AX_Y, -8.0, w, deltas);
+        addWorldAxisDelta('Head', AX_X, -2.5, w, deltas);
+
+        // Right arm (viewer's left) raised cheerfully in idol wave!
+        addWorldAxisDelta('Shoulder_R', AX_Z, -8.0, w, deltas);
+        addWorldAxisDelta('UpperArm_R', AX_Z, -72.0, w, deltas);
+        addWorldAxisDelta('UpperArm_R', AX_X, -14.0, w, deltas);
+        addWorldAxisDelta('LowerArm_R', AX_Z, -44.0, w, deltas);
+        addWorldAxisDelta('LowerArm_R', AX_X, -10.0, w, deltas);
+        addWorldAxisDelta('Hand_R', AX_Y, 10.0, w, deltas);
+
+        // Left arm (viewer's right) gracefully poised near starry organza skirt
+        addWorldAxisDelta('Shoulder_L', AX_Z, 4.0, w, deltas);
+        addWorldAxisDelta('UpperArm_L', AX_Z, 11.0, w, deltas);
+        addWorldAxisDelta('UpperArm_L', AX_X, -8.0, w, deltas);
+        addWorldAxisDelta('LowerArm_L', AX_Z, 18.0, w, deltas);
+        addWorldAxisDelta('LowerArm_L', AX_X, -12.0, w, deltas);
+        addWorldAxisDelta('Hand_L', AX_Y, -10.0, w, deltas);
+
+        // Gentle stance on legs
+        addWorldAxisDelta('UpperLeg_R', AX_X, 6.0, w, deltas);
+        addWorldAxisDelta('UpperLeg_R', AX_Z, -3.5, w, deltas);
+        addWorldAxisDelta('LowerLeg_R', AX_X, -12.0, w, deltas);
+        addWorldAxisDelta('UpperLeg_L', AX_X, -4.0, w, deltas);
+        addWorldAxisDelta('UpperLeg_L', AX_Z, 2.5, w, deltas);
+
+        // Breeze on hair & skirt train
+        addWorldAxisDelta('Hair_Back_L_02', AX_Z, 5.0 + sway * 1.5, w, deltas);
+        addWorldAxisDelta('Hair_Back_R_02', AX_Z, -4.0 - sway * 1.5, w, deltas);
+        addWorldAxisDelta('Organza_L_02', AX_Z, 6.0, w, deltas);
+        addWorldAxisDelta('Organza_R_02', AX_Z, -5.0, w, deltas);
+
+        // Guaranteed inward staggered finger curls via exact rest curl axis!
+        const rCurls = {
+          Thumb: [10, 12, 8],
+          Index: [6, 10, 6],
+          Middle: [12, 16, 10],
+          Ring: [18, 22, 14],
+          Pinky: [24, 28, 16],
+        };
+        const lCurls = {
+          Thumb: [14, 16, 10],
+          Index: [8, 12, 8],
+          Middle: [16, 22, 12],
+          Ring: [24, 28, 16],
+          Pinky: [30, 34, 18],
+        };
+        for (const [fn, angs] of Object.entries(rCurls)) {
+          angs.forEach((deg, idx) => {
+            const bname = `${fn}_0${idx + 1}_R`;
+            addWorldAxisDelta(bname, computeCurlAxis(bname, fn === 'Thumb' ? THUMB_FWD_R : PALM_FWD_R), deg, w, deltas);
+          });
+        }
+        for (const [fn, angs] of Object.entries(lCurls)) {
+          angs.forEach((deg, idx) => {
+            const bname = `${fn}_0${idx + 1}_L`;
+            addWorldAxisDelta(bname, computeCurlAxis(bname, fn === 'Thumb' ? THUMB_FWD_L : PALM_FWD_L), deg, w, deltas);
+          });
+        }
+      }
+
+      for (const [bname, b] of Object.entries(bonesByName)) {
+        b.quaternion.copy(restQuats[bname]);
+        if (deltas[bname]) {
+          b.quaternion.multiply(deltas[bname]);
+        }
+      }
+    }
+
+    function updateMorphTargets(elapsed, dt) {
+      let blinkWeight = 0.0;
+      if (autoBlink && targetExpr !== 'Smile_Happy' && targetExpr !== 'Blink_L') {
+        if (elapsed >= nextBlinkTime && blinkProgress < 0) {
+          blinkProgress = 0;
+        }
+        if (blinkProgress >= 0) {
+          blinkProgress += dt / 0.19;
+          if (blinkProgress >= 1.0) {
+            blinkProgress = -1;
+            nextBlinkTime = elapsed + 3.2 + Math.random() * 2.2;
+          } else {
+            blinkWeight = Math.sin(blinkProgress * Math.PI);
+          }
+        }
+      } else {
+        blinkProgress = -1;
+      }
+
+      const speed = Math.min(1, dt * 9.0);
+      for (const mesh of morphMeshes) {
+        const dict = mesh.morphTargetDictionary;
+        const inf = mesh.morphTargetInfluences;
+        if (!dict || !inf) continue;
+        for (const k of ALL_EXPR_KEYS) {
+          const idx = dict[k];
+          if (idx === undefined) continue;
+          let goal = 0.0;
+          if (targetExpr === k) goal = 1.0;
+          if (k === 'Blink' && blinkWeight > 0.0) goal = Math.max(goal, blinkWeight);
+          inf[idx] += (goal - inf[idx]) * speed;
+        }
+      }
+    }
+
+    // Load Ciel GLB
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load(
+      './assets/Ciel_WuWa_3D_web.glb',
+      (gltf) => {
+        const model = gltf.scene;
+        scene.add(model);
+        model.updateMatrixWorld(true);
+
+        model.traverse((obj) => {
+          if (obj.isBone) {
+            bonesByName[obj.name] = obj;
+            restQuats[obj.name] = obj.quaternion.clone();
+            const wq = new THREE.Quaternion();
+            obj.getWorldQuaternion(wq);
+            restWorldQuats[obj.name] = wq;
+            if (obj.children && obj.children.length > 0) {
+              const wp0 = new THREE.Vector3();
+              const wp1 = new THREE.Vector3();
+              obj.getWorldPosition(wp0);
+              obj.children[0].getWorldPosition(wp1);
+              const d = wp1.sub(wp0);
+              if (d.lengthSq() > 1e-8) {
+                restDirs[obj.name] = d.normalize();
+              }
+            }
+          }
+
+          if (obj.isMesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+            obj.frustumCulled = false;
+
+            if (obj.morphTargetDictionary && obj.morphTargetInfluences) {
+              morphMeshes.push(obj);
+            }
+
+            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+            for (const m of mats) {
+              if (!m) continue;
+              if (m.name === 'Mat_Organza_Sheer') {
+                m.transparent = true;
+                m.depthWrite = false;
+                m.side = THREE.DoubleSide;
+                m.opacity = 0.90;
+                m.roughness = 0.25;
+              } else if (m.name === 'Mat_Hair') {
+                m.transparent = false;
+                m.alphaTest = 0.35;
+                m.side = THREE.DoubleSide;
+                m.roughness = 0.36;
+              } else if (m.name === 'Mat_Eye_Iris') {
+                m.roughness = 0.08;
+                m.emissiveIntensity = 0.48;
+              } else if (
+                m.name === 'Mat_White_Satin' ||
+                m.name === 'Mat_Skirt_Pleat' ||
+                m.name === 'Mat_Navy_Satin' ||
+                m.name === 'Mat_Royal_Ribbon' ||
+                m.name === 'Mat_Glove_White'
+              ) {
+                m.side = THREE.DoubleSide;
+              } else if (
+                m.name === 'Mat_Skin_Face' ||
+                m.name === 'Mat_Skin_Body' ||
+                m.name === 'Mat_Skin_Hand'
+              ) {
+                m.roughness = 0.62;
+                m.metalness = 0.0;
+              }
+              m.needsUpdate = true;
+            }
+          }
+        });
+
+        loaderOverlay.classList.add('hidden');
+      },
+      (xhr) => {
+        if (xhr.total > 0) {
+          const pct = Math.min(100, Math.round((xhr.loaded / xhr.total) * 100));
+          loaderBar.style.width = `${pct}%`;
+          loaderText.textContent = `시엘 3D 모델 불러오는 중... ${pct}%`;
+        }
+      },
+      (err) => {
+        console.error('GLB load failed:', err);
+        showError(`3D 모델을 불러오지 못했습니다: ${err?.message || err}`);
+      }
+    );
+
+    // UI Bindings
+    document.querySelectorAll('#expr-buttons button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#expr-buttons button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        targetExpr = btn.dataset.expr;
+      });
+    });
+
+    document.querySelectorAll('#pose-buttons button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#pose-buttons button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentPoseMode = btn.dataset.pose;
+        poseTargetBlend = currentPoseMode === 'idol' ? 1.0 : 0.0;
+      });
+    });
+
+    const btnBlink = document.getElementById('btn-blink');
+    btnBlink.addEventListener('click', () => {
+      autoBlink = !autoBlink;
+      btnBlink.classList.toggle('active', autoBlink);
+      btnBlink.textContent = autoBlink ? '깜빡임 ON' : '깜빡임 OFF';
+    });
+
+    const btnSpin = document.getElementById('btn-spin');
+    btnSpin.addEventListener('click', () => {
+      autoSpin = !autoSpin;
+      btnSpin.classList.toggle('active', autoSpin);
+      controls.autoRotate = autoSpin;
+      controls.autoRotateSpeed = 1.6;
+    });
+
+    // Gallery Modal
+    const galleryItems = [
+      ['01_Turnaround_Front.jpg', '01. 정면 (Front)'],
+      ['02_Turnaround_Side.jpg', '02. 측면 (Side)'],
+      ['03_Turnaround_Back.jpg', '03. 후면 (Back)'],
+      ['04_Turnaround_ThreeQuarter.jpg', '04. 3/4 히어로 뷰'],
+      ['05_Closeup_Bust_Face.jpg', '05. 바스트·얼굴 클로즈업'],
+      ['06_Expression_Sheet_2x2.jpg', '06. 4종 표정 시트'],
+      ['07_Rig_Idol_Pose_Showcase.jpg', '07. 아이돌 스테이지 포즈'],
+    ];
+    const galleryGrid = document.getElementById('gallery-grid');
+    for (const [file, label] of galleryItems) {
+      const card = document.createElement('div');
+      card.className = 'gallery-item';
+      card.innerHTML = `<img src="./assets/renders/${file}" alt="${label}" loading="lazy" /><span>${label}</span>`;
+      galleryGrid.appendChild(card);
+    }
+
+    const galleryModal = document.getElementById('gallery-modal');
+    document.getElementById('btn-gallery').addEventListener('click', () => galleryModal.classList.add('open'));
+    document.getElementById('btn-close-gallery').addEventListener('click', () => galleryModal.classList.remove('open'));
+    galleryModal.addEventListener('click', (e) => {
+      if (e.target === galleryModal) galleryModal.classList.remove('open');
+    });
+
+    // Resize & Render Loop
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.05, clock.getDelta());
+      const elapsed = clock.elapsedTime;
+
+      if (camAnim) {
+        camAnim.t = Math.min(1, camAnim.t + dt * 3.4);
+        const s = 1 - Math.pow(1 - camAnim.t, 3);
+        camera.position.lerpVectors(camAnim.fromPos, camAnim.toPos, s);
+        controls.target.lerpVectors(camAnim.fromTgt, camAnim.toTgt, s);
+        if (camAnim.t >= 1) camAnim = null;
+      }
+
+      updateMorphTargets(elapsed, dt);
+      updateSkeletonPose(elapsed, dt);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
